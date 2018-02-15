@@ -1,5 +1,6 @@
 # Files
 *.png
+*.swp
 *.tar
 # Directories
 *.MS
