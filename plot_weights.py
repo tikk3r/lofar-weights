@@ -1,13 +1,17 @@
 #!/usr/bin/env python
 """ Provides acces to the weights of an MS file. """
 
+import datetime
+import math
 import os
 import sys
 
+import astropy.time
 import numpy as np
 
 from casacore.tables import taql
 from matplotlib import cm
+from matplotlib import dates
 from matplotlib.pyplot import figure, show
 from matplotlib import ticker
 
@@ -17,14 +21,6 @@ __version__ = '1.0.0'
 __maintainer__ = 'Frits Sweijen'
 __email__ = 'sweijen <at> strw.leidenuniv.nl'
 __status__ = 'Development'
-
-@ticker.FuncFormatter
-def major_formatter(x, pos):
-    return "%.2f" % x
-
-@ticker.FuncFormatter
-def minor_formatter(x, pos):
-    return "%.2f" % x
 
 def plot_weight_channel(msfile, pol=0):
     # Polarization indices are 0, 1, 2, 3 = XX, YY, XY, YX, respectively.
@@ -60,6 +56,7 @@ def plot_weight_channel(msfile, pol=0):
     ax.set_xlim(min(freq), max(freq))
     ax.set_ylim(np.min(weights), np.max(weights))
     ax.xaxis.set_major_locator(ticker.MultipleLocator(0.05))
+    major_formatter = ticker.FuncFormatter(lambda x, pos: '%.2f'%(x,))
     ax.xaxis.set_major_formatter(major_formatter)
     ax.set_xlabel('Frequency [MHz]')
     ax.set_ylabel('Weights')
@@ -68,7 +65,7 @@ def plot_weight_channel(msfile, pol=0):
     fig.savefig(imgname, bbox_inches='tight', additional_artists=leg, dpi=250)
     return 
 
-def plot_weight_time(msfile):
+def plot_weight_time(msfile, dt_elev=100, plot_time_unit='h'):
     print 'Plotting weights vs. time for %s' % (msfile,)
     imgname ='weight_time_' + msfile[msfile.find('SB'):msfile.find('SB')+5]+'.png'
     # Select the time, weights and elevation of ANTENNA1 averaging over baselines/antennas.
@@ -80,10 +77,6 @@ def plot_weight_time(msfile):
     # Select time, weights and elevation after averaging the latter two over all baselines (axis 0).
     #t = taql('SELECT TIME, MEANS(GAGGR(WEIGHT_SPECTRUM),0) AS WEIGHT, MSCAL.AZEL1()[0] AS ELEV FROM $t1 GROUPBY TIME')
     t = taql('SELECT TIME, MEANS(GAGGR(WEIGHT_SPECTRUM),0) AS WEIGHT, MEANS(GAGGR(MSCAL.AZEL1()[1]),0) AS ELEV FROM $t1 GROUPBY TIME')
-    #antennas = t.getcol('ANTENNA')
-    #print len(antennas), ' antennas'
-    #antenna_names = taql('SELECT NAME FROM '+msfile+'/ANTENNA')
-
     weights = t.getcol('WEIGHT')
     print weights.shape
     time = t.getcol('TIME')
@@ -92,7 +85,6 @@ def plot_weight_time(msfile):
     elevation = t.getcol('ELEV')
     # Select the weights for all timestamps one channel and one polarization (in that order).
     weights = t.getcol('WEIGHT')[:, 0, 0]
-    print weights.shape
     
     # Plot weights for elevation and save the image.
     print 'Plotting...'
@@ -100,14 +92,26 @@ def plot_weight_time(msfile):
     fig = figure()
     fig.suptitle(msfile, fontweight='bold')
     ax = fig.add_subplot(111)
-    ax.scatter(time, weights, marker='.', color='k', label='Weights')
-    # Plot the elevation as a function of time.
-    ax_elev = ax.twinx()
-    ax_elev.plot(time, elevation * 180/np.pi, 'b', label='Elevation')
 
-    ax.set_xlim(min(time), max(time))
+    if plot_time_unit.lower() == 'h':
+        time_h = time / 3600
+        time_h = (time_h - math.floor(time_h[0]/24) * 24)
+        ax.scatter(time_h, weights, marker='.', color='k', label='Weights')
+        # Plot the elevation as a function of time.
+        ax_elev = ax.twinx()
+        ax_elev.plot(time_h, elevation * 180/np.pi, 'b', label='Elevation')
+
+        ax.xaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: '%.2d:%.2d:%.2d' % (int(x), (x%1)*60, (((x%1)*60)%1 * 60))))
+        ax.set_xlim(min(time_h), max(time_h))
+        ax.set_xlabel('Time [h]')
+    elif plot_time_unit.lower() == 's':
+        ax.scatter(time, weights, marker='.', color='k', label='Weights')
+        # Plot the elevation as a function of time.
+        ax_elev = ax.twinx()
+        ax_elev.plot(time, elevation * 180/np.pi, 'b', label='Elevation')
+        ax.set_xlim(min(time), max(time))
+        ax.set_xlabel('Time [s]')
     ax.set_ylim(np.min(weights), np.max(weights))
-    ax.set_xlabel('Time [s]')
     ax.set_ylabel('Weights')
     ax_elev.set_ylabel('Elevation [deg]')
 
@@ -124,4 +128,4 @@ if __name__ == '__main__':
     # Get the MS filename.
     msfile = sys.argv[1]
     #plot_weight_channel(msfile)
-    plot_weight_time(msfile)
+    plot_weight_time(msfile, plot_time_unit='h')
