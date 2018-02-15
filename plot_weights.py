@@ -40,10 +40,8 @@ def plot_weight_channel(msfile, pol=0):
     antenna_names = taql('SELECT NAME FROM '+msfile+'/ANTENNA')
     # Obtain channel frequencies in Hz.
     chan_freq = taql('SELECT CHAN_FREQ FROM '+msfile+'/SPECTRAL_WINDOW')
-    print 'Channel frequencies: '
     # Select the first table, column CHAN_FREQ and convert to MHz.
     freq = chan_freq[0]['CHAN_FREQ'] * 1e-6
-    print freq
     # Plot the results.
     print 'Plotting...'
     fig = figure()
@@ -69,19 +67,14 @@ def plot_weight_time(msfile, dt_elev=100, plot_time_unit='h'):
     print 'Plotting weights vs. time for %s' % (msfile,)
     imgname ='weight_time_' + msfile[msfile.find('SB'):msfile.find('SB')+5]+'.png'
     # Select the time, weights and elevation of ANTENNA1 averaging over baselines/antennas.
-    #t = taql('SELECT TIME, ANTENNA1 AS ANTENNA, MEANS(GAGGR(WEIGHT_SPECTRUM),0) AS WEIGHT, MSCAL.AZEL1()[1] AS ELEV FROM $msfile WHERE ANY(FLAG)==False GROUPBY TIME')
     # Select only unflagged data.
     t1 = taql('select ANTENNA1, DATA, WEIGHT_SPECTRUM, TIME, FIELD_ID from $msfile where any(FLAG)==False')
     w = t1.getcol('WEIGHT_SPECTRUM')
     print w.shape
     # Select time, weights and elevation after averaging the latter two over all baselines (axis 0).
-    #t = taql('SELECT TIME, MEANS(GAGGR(WEIGHT_SPECTRUM),0) AS WEIGHT, MSCAL.AZEL1()[0] AS ELEV FROM $t1 GROUPBY TIME')
     t = taql('SELECT TIME, MEANS(GAGGR(WEIGHT_SPECTRUM),0) AS WEIGHT, MEANS(GAGGR(MSCAL.AZEL1()[1]),0) AS ELEV FROM $t1 GROUPBY TIME')
     weights = t.getcol('WEIGHT')
-    print weights.shape
     time = t.getcol('TIME')
-    #t2 = taql('SELECT MSCAL.AZEL1()[1] AS ELEV FROM $t1 ORDERBY DISTINCT TIME')
-    #t2 = taql('SELECT MSCAL.AZEL1()[1] AS ELEV FROM $t1 ORDERBY DISTINCT TIME')
     elevation = t.getcol('ELEV')
     # Select the weights for all timestamps one channel and one polarization (in that order).
     weights = t.getcol('WEIGHT')[:, 0, 0]
@@ -123,8 +116,6 @@ def plot_weight_time(msfile, dt_elev=100, plot_time_unit='h'):
     return
 
 if __name__ == '__main__':
-    import casacore
-    print casacore.__version__
     # Get the MS filename.
     msfile = sys.argv[1]
     #plot_weight_channel(msfile)
