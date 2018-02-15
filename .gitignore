@@ -1,0 +1,8 @@
+# Files
+*.png
+*.tar
+# Directories
+*.MS
+*.MS/**
+*.fresh
+*.fresh/**
