@@ -59,7 +59,7 @@ def plot_data_channel(msfile, pol=0):
     #ax.xaxis.set_major_locator(ticker.MultipleLocator(0.05))
     #major_formatter = ticker.FuncFormatter(lambda x, pos: '%.2f'%(x,))
     #ax.xaxis.set_major_formatter(major_formatter)
-    ax.set_xlabel('Frequency [MHz]')
+    ax.set_xlabel('Channel')
     ax.set_ylabel('Data')
     ax.set_yscale('log')
     leg = ax.legend(bbox_to_anchor=(1.05, 1.0), ncol=3, borderaxespad=0.0)
@@ -77,6 +77,7 @@ def plot_weight_channel(msfile, pol=0):
     # Average over all baselines (axis 0) and group the resulting data by antenna.
     #t = taql('SELECT TIME, ANTENNA, MEANS(GAGGR(WEIGHT_SPECTRUM),0) AS WEIGHT FROM $t1 GROUPBY ANTENNA')
     t1 = taql('SELECT TIME, ANTENNA1 AS ANTENNA, DATA, WEIGHT_SPECTRUM FROM $msfile WHERE ANY(FLAG)==False')
+    #t1 = taql('SELECT TIME, ANTENNA1 AS ANTENNA, DATA, WEIGHT_SPECTRUM FROM $msfile WHERE FLAG_ROW==False')
     # Average over all baselines (axis 0) and group the resulting data by antenna.
     t = taql('SELECT TIME, ANTENNA, DATA, MEANS(GAGGR(WEIGHT_SPECTRUM),0) AS WEIGHT FROM $t1 GROUPBY ANTENNA')
     w = t.getcol('WEIGHT')
@@ -116,17 +117,37 @@ def plot_weight_time(msfile, dt_elev=100, plot_time_unit='h'):
     imgname ='weight_time_' + msfile[msfile.find('SB'):msfile.find('SB')+5]+'.png'
     # Select the time, weights and elevation of ANTENNA1 averaging over baselines/antennas.
     # Select only unflagged data.
-    t1 = taql('select ANTENNA1, DATA, WEIGHT_SPECTRUM, TIME, FIELD_ID from $msfile where any(FLAG)==False')
+    t1 = taql('select ANTENNA1, ANTENNA2, DATA, WEIGHT_SPECTRUM, TIME, FIELD_ID from $msfile where any(FLAG)==False')
     w = t1.getcol('WEIGHT_SPECTRUM')
     print w.shape
-    # Select time, weights and elevation after averaging the latter two over all baselines (axis 0).
-    t = taql('SELECT TIME, MEANS(GAGGR(WEIGHT_SPECTRUM),0) AS WEIGHT, MEANS(GAGGR(MSCAL.AZEL1()[1]),0) AS ELEV FROM $t1 GROUPBY TIME')
+    print len(np.unique(t1.getcol('ANTENNA1')))
+    print len(np.unique(t1.getcol('ANTENNA2')))
+    # Select time, weights and elevation.
+    # This gets the average elevation w.r.t. to antenna 1, where the average is taken over all baselines.
+    #t = taql('SELECT TIME, MEANS(GAGGR(WEIGHT_SPECTRUM),0) AS WEIGHT, MSCAL.AZEL()[1] AS ELEV FROM $t1 GROUPBY TIME')
+    t = taql('SELECT TIME, MEANS(GAGGR(WEIGHT_SPECTRUM),0) AS WEIGHT, MEANS(GAGGR(MSCAL.AZEL1()[1]), 0) AS ELEV FROM $t1 GROUPBY TIME')
+    t2 = taql('SELECT TIME, REAL(DATA) AS DATA_REAL FROM $t1 GROUPBY TIME')
     weights = t.getcol('WEIGHT')
     time = t.getcol('TIME')
     elevation = t.getcol('ELEV')
+
+    datar = t2.getcol('DATA_REAL')
+    # Calculate variance over 10 timestamp intervals. The last interval may be shorter.
+    # datar shape is (timestamps, channels, polarizations)
+    delta = 10
+    variance = np.ones(shape=(len(time)//delta, weights.shape[1], weights.shape[2]))
+    for i in xrange(len(time)//delta):
+        datar_shifted = np.roll(datar, -1)
+        datar = datar - datar_shifted
+        v = np.var(datar[delta*i: delta*i+delta,:,:], axis=0)
+        variance[i] = 1. / v
+    print variance.shape
+    print len(variance[:, 0, 0])
+    print variance[0, :, 0]
+    print len(time), len(time[::delta])
+    
     # Select the weights for all timestamps one channel and one polarization (in that order).
     weights = t.getcol('WEIGHT')[:, 0, 0]
-    
     # Plot weights for elevation and save the image.
     print 'Plotting...'
     colors = iter(cm.rainbow(np.linspace(0, 1, len(weights))))
@@ -138,6 +159,10 @@ def plot_weight_time(msfile, dt_elev=100, plot_time_unit='h'):
         time_h = time / 3600
         time_h = (time_h - math.floor(time_h[0]/24) * 24)
         ax.scatter(time_h, weights, marker='.', color='k', label='Weights')
+        #print len(time_h[::delta])
+        #print time_h[::delta].shape, variance[:, 0, 0].shape
+        ax.scatter(time_h[::delta][:-1], variance[:, 0, 0], marker='x', label='Boxed variance $\\Delta=%d$'%(delta,))
+        ax.set_yscale('log')
         # Plot the elevation as a function of time.
         ax_elev = ax.twinx()
         ax_elev.plot(time_h, elevation * 180/np.pi, 'b', label='Elevation')
@@ -152,7 +177,9 @@ def plot_weight_time(msfile, dt_elev=100, plot_time_unit='h'):
         ax_elev.plot(time, elevation * 180/np.pi, 'b', label='Elevation')
         ax.set_xlim(min(time), max(time))
         ax.set_xlabel('Time [s]')
-    ax.set_ylim(np.min(weights), np.max(weights))
+    #ax.set_ylim(np.min(weights), np.max(weights))
+    #ax.set_ylim(np.min(variance), np.max(variance))
+    ax.set_ylim(min(np.min(weights), np.min(variance)), 10 * max(np.max(weights), np.max(variance)))
     ax.set_ylabel('Weights')
     ax_elev.set_ylabel('Elevation [deg]')
 
@@ -166,6 +193,6 @@ def plot_weight_time(msfile, dt_elev=100, plot_time_unit='h'):
 if __name__ == '__main__':
     # Get the MS filename.
     msfile = sys.argv[1]
-    plot_weight_channel(msfile)
-    #plot_weight_time(msfile, plot_time_unit='h')
-    plot_data_channel(msfile, pol=3)
+    #plot_weight_channel(msfile)
+    plot_weight_time(msfile, plot_time_unit='h')
+    #plot_data_channel(msfile, pol=3)

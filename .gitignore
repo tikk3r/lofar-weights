@@ -3,7 +3,12 @@
 *.swp
 *.tar
 # Directories
+casa
+casa/*
+calibrated
+calibrated/*
+L*
 *.MS
 *.MS/**
-*.fresh
-*.fresh/**
+fresh
+fresh/**

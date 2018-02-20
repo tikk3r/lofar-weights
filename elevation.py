@@ -22,10 +22,14 @@ ms = pt.table(msname, ack=False)
 ant_table = pt.table(msname + '/ANTENNA', ack=False)
 ant_no = 0
 pos = ant_table.getcol('POSITION')
+#x = qa.quantity( pos[ant_no,0], 'm' )
 x = qa.quantity( pos[ant_no,0], 'm' )
+#y = qa.quantity( pos[ant_no,1], 'm' )
 y = qa.quantity( pos[ant_no,1], 'm' )
+#z = qa.quantity( pos[ant_no,2], 'm' )
 z = qa.quantity( pos[ant_no,2], 'm' )
-position =  me.position( 'wgs84', x, y, z )
+position =  me.position( 'WGS84', x, y, z )
+#position =  me.position( 'ITRF', x, y, z )
 me.doframe( position )
 #print position
 ant_table.close()
@@ -58,7 +62,7 @@ me.doframe(t1)
 # Loop through all time stamps and calculate the elevation of the pointing
 time_init = time[0]
 elev = []
-times = np.arange(time[0], time[-1], 100)
+times = np.arange(time[0], time[-1], 50)
 for t in times:
     t_qa = qa.quantity(t, 's')
     t1 = me.epoch('utc', t_qa)
@@ -75,6 +79,7 @@ times_hours = times/3600.0
 # Convert from hours to days, round down to the closest day, convert back to hours and subtract.
 # This gives time of day in hours.
 times_hours = times_hours - floor(times_hours[0]/24)*24
+print times_hours[0]
 
 fig = figure()
 fig.suptitle(msname, fontweight='bold')
