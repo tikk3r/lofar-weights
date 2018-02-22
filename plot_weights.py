@@ -22,6 +22,10 @@ __maintainer__ = 'Frits Sweijen'
 __email__ = 'sweijen <at> strw.leidenuniv.nl'
 __status__ = 'Development'
 
+def normalize(x, nmin, nmax):
+    normed = (x - nmin) / (nmax - nmin)
+    return normed
+
 def plot_data_channel(msfile, pol=0):
     # Polarization indices are 0, 1, 2, 3 = XX, YY, XY, YX, respectively.
     print 'Plotting data vs. channel for %s' % (msfile,)
@@ -112,12 +116,12 @@ def plot_weight_channel(msfile, pol=0):
     fig.savefig(imgname, bbox_inches='tight', additional_artists=leg, dpi=250)
     return 
 
-def plot_weight_time(msfile, dt_elev=100, plot_time_unit='h'):
+def plot_weight_time(msfile, dt_elev=100, plot_time_unit='h', delta=10):
     print 'Plotting weights vs. time for %s' % (msfile,)
-    imgname ='weight_time_' + msfile[msfile.find('SB'):msfile.find('SB')+5]+'.png'
+    imgname ='weight_time_' + msfile[msfile.find('SB'):msfile.find('SB')+5]+'_'+str(delta)+'.png'
     # Select the time, weights and elevation of ANTENNA1 averaging over baselines/antennas.
     # Select only unflagged data.
-    t1 = taql('select ANTENNA1, ANTENNA2, DATA, WEIGHT_SPECTRUM, TIME, FIELD_ID from $msfile where any(FLAG)==False')
+    t1 = taql('select ANTENNA1, ANTENNA2, DATA, WEIGHT_SPECTRUM, TIME, FIELD_ID from $msfile where ALL(FLAG)==False')
     w = t1.getcol('WEIGHT_SPECTRUM')
     print w.shape
     print len(np.unique(t1.getcol('ANTENNA1')))
@@ -126,7 +130,7 @@ def plot_weight_time(msfile, dt_elev=100, plot_time_unit='h'):
     # This gets the average elevation w.r.t. to antenna 1, where the average is taken over all baselines.
     #t = taql('SELECT TIME, MEANS(GAGGR(WEIGHT_SPECTRUM),0) AS WEIGHT, MSCAL.AZEL()[1] AS ELEV FROM $t1 GROUPBY TIME')
     t = taql('SELECT TIME, MEANS(GAGGR(WEIGHT_SPECTRUM),0) AS WEIGHT, MEANS(GAGGR(MSCAL.AZEL1()[1]), 0) AS ELEV FROM $t1 GROUPBY TIME')
-    t2 = taql('SELECT TIME, REAL(DATA) AS DATA_REAL FROM $t1 GROUPBY TIME')
+    t2 = taql('SELECT TIME, MEANS(GAGGR(REAL(DATA)),0) AS DATA_REAL FROM $t1 GROUPBY TIME')
     weights = t.getcol('WEIGHT')
     time = t.getcol('TIME')
     elevation = t.getcol('ELEV')
@@ -134,20 +138,23 @@ def plot_weight_time(msfile, dt_elev=100, plot_time_unit='h'):
     datar = t2.getcol('DATA_REAL')
     # Calculate variance over 10 timestamp intervals. The last interval may be shorter.
     # datar shape is (timestamps, channels, polarizations)
-    delta = 10
     variance = np.ones(shape=(len(time)//delta, weights.shape[1], weights.shape[2]))
+    datar_shifted = np.roll(datar, -1, axis=1)
+    datar = datar - datar_shifted
     for i in xrange(len(time)//delta):
-        datar_shifted = np.roll(datar, -1)
-        datar = datar - datar_shifted
         v = np.var(datar[delta*i: delta*i+delta,:,:], axis=0)
-        variance[i] = 1. / v
-    print variance.shape
-    print len(variance[:, 0, 0])
-    print variance[0, :, 0]
-    print len(time), len(time[::delta])
+        if not np.any(v):
+            variance[i] = -1. / v
+        else:
+            variance[i] = 1. / v
     
+    #fig = figure()
+    #ax = fig.add_subplot(111)
+    #ax.hist(datar[:, 0, 0])
+    #ax.scatter(time, datar[:, 0, 0])
+    #show()
     # Select the weights for all timestamps one channel and one polarization (in that order).
-    weights = t.getcol('WEIGHT')[:, 0, 0]
+    weights = t.getcol('WEIGHT')
     # Plot weights for elevation and save the image.
     print 'Plotting...'
     colors = iter(cm.rainbow(np.linspace(0, 1, len(weights))))
@@ -158,14 +165,24 @@ def plot_weight_time(msfile, dt_elev=100, plot_time_unit='h'):
     if plot_time_unit.lower() == 'h':
         time_h = time / 3600
         time_h = (time_h - math.floor(time_h[0]/24) * 24)
-        ax.scatter(time_h, weights, marker='.', color='k', label='Weights')
-        #print len(time_h[::delta])
-        #print time_h[::delta].shape, variance[:, 0, 0].shape
-        ax.scatter(time_h[::delta][:-1], variance[:, 0, 0], marker='x', label='Boxed variance $\\Delta=%d$'%(delta,))
-        ax.set_yscale('log')
+        # Normalize the weights w.r.t. the XX polarization.
+        nmin = np.min(weights[:, 5, 0])
+        nmax = np.max(weights[:, 5, 0])
+        ax.scatter(time_h, normalize(weights[:, 5, 0], nmin, nmax), marker='.', color='C1', alpha=0.25, label='XX Weights')
+        ax.scatter(time_h, normalize(weights[:, 5, 1], nmin, nmax), marker='.', color='C2', alpha=0.25, label='XY Weights')
+        ax.scatter(time_h, normalize(weights[:, 5, 2], nmin, nmax), marker='.', color='C3', alpha=0.25, label='YX Weights')
+        ax.scatter(time_h, normalize(weights[:, 5, 3], nmin, nmax), marker='.', color='C4', alpha=0.25, label='YY Weights')
+        # Normalize the statistic w.r.t. the XX polarization.
+        nmin = np.min(variance[:, 5, 0])
+        nmax = np.max(variance[:, 5, 0])
+        indices = ((np.asarray(range(0, len(variance[:, 5, 0]))) + 0.5) * delta).astype(int)
+        ax.plot(time_h[indices], normalize(variance[:, 5, 0], nmin, nmax), '--d', color='C1', label='XX Boxed variance $\\Delta=%d$'%(delta,))
+        ax.plot(time_h[indices], normalize(variance[:, 5, 1], nmin, nmax), '--d', color='C2', label='XY Boxed variance $\\Delta=%d$'%(delta,))
+        ax.plot(time_h[indices], normalize(variance[:, 5, 2], nmin, nmax), '--d', color='C3', label='YX Boxed variance $\\Delta=%d$'%(delta,))
+        ax.plot(time_h[indices], normalize(variance[:, 5, 3], nmin, nmax), '--d', color='C4', label='YY Boxed variance $\\Delta=%d$'%(delta,))
         # Plot the elevation as a function of time.
         ax_elev = ax.twinx()
-        ax_elev.plot(time_h, elevation * 180/np.pi, 'b', label='Elevation')
+        ax_elev.plot(time_h, elevation * 180/np.pi, 'k', linewidth=2, label='Elevation')
 
         ax.xaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: '%.2d:%.2d:%.2d' % (int(x), (x%1)*60, (((x%1)*60)%1 * 60))))
         ax.set_xlim(min(time_h), max(time_h))
@@ -179,8 +196,8 @@ def plot_weight_time(msfile, dt_elev=100, plot_time_unit='h'):
         ax.set_xlabel('Time [s]')
     #ax.set_ylim(np.min(weights), np.max(weights))
     #ax.set_ylim(np.min(variance), np.max(variance))
-    ax.set_ylim(min(np.min(weights), np.min(variance)), 10 * max(np.max(weights), np.max(variance)))
-    ax.set_ylabel('Weights')
+    #ax.set_ylim(ymin=min(np.min(weights), np.min(variance)), ymax=max(np.max(weights), np.max(variance)))
+    ax.set_ylabel('Weights Normalized w.r.t. XX')
     ax_elev.set_ylabel('Elevation [deg]')
 
     handles, labels = ax.get_legend_handles_labels()
@@ -188,11 +205,12 @@ def plot_weight_time(msfile, dt_elev=100, plot_time_unit='h'):
     leg = ax.legend(handles+handles2, labels+labels2, loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=3, borderaxespad=0.0)
     print 'Saving plot as %s' % (imgname,)
     fig.savefig(imgname, bbox_inches='tight', additional_artists=leg, dpi=250)
+    show()
     return
 
 if __name__ == '__main__':
     # Get the MS filename.
     msfile = sys.argv[1]
-    #plot_weight_channel(msfile)
-    plot_weight_time(msfile, plot_time_unit='h')
-    #plot_data_channel(msfile, pol=3)
+    plot_weight_channel(msfile)
+    plot_weight_time(msfile, delta=40, plot_time_unit='h')
+    plot_data_channel(msfile, pol=3)
