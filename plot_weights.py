@@ -1,17 +1,14 @@
 #!/usr/bin/env python
 """ Provides acces to the weights of an MS file. """
 
-import datetime
 import math
 import os
 import sys
 
-import astropy.time
 import numpy as np
 
 from casacore.tables import taql
 from matplotlib import cm
-from matplotlib import dates
 from matplotlib.pyplot import figure, show
 from matplotlib import ticker
 
