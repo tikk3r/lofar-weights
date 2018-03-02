@@ -93,7 +93,7 @@ def plot_weight_channel(msfile, pol=0, delta=16, threshold=1e5):
     elif temp.getcol('CORR_TYPE')[0] in np.asarray([9, 10, 11, 12]):
         polarization = ['XX', 'YY', 'XY', 'YX']
 
-    datar = t.getcol('DATA_REAL')
+    datar = t.getcol('DATA_REAL')[:,:,pol]
     print datar.shape
     weights = t.getcol('WEIGHT')
     antennas = t.getcol('ANTENNA')
@@ -107,17 +107,18 @@ def plot_weight_channel(msfile, pol=0, delta=16, threshold=1e5):
     #print freq
     # Calculate the variance in the visibilities over channels.
     print 'Calculating visibility variance.'
-    variance = np.ones(shape=(weights.shape[0], weights.shape[1]//delta, weights.shape[2]))
+    #variance = np.ones(shape=(weights.shape[0], weights.shape[1]//delta, weights.shape[2]))
+    variance = np.ones(shape=(weights.shape[0], weights.shape[1]//delta))
     # Subtract adjacent channels to eliminate physical signal.
     datar_shifted = np.roll(datar, -1, axis=1)
     datar -= datar_shifted
     for i in xrange(datar.shape[1]//delta):
         # Take a frequency bin of delta channels.
-        v = np.nanvar(datar[:,delta*i: delta*i+delta,:], axis=1, keepdims=True)
+        v = np.nanvar(datar[:,delta*i: delta*i+delta], axis=1)
         if not np.any(v):
-            variance[:,delta*i: delta*i+delta,:] = -np.inf
+            variance[:,i] = -np.inf
         else:
-            variance[:,delta*i: delta*i+delta,:] = 1. / v
+            variance[:,i] = 1. / v
 
     # Plot the results.
     print 'Plotting weights...'
@@ -151,17 +152,20 @@ def plot_weight_channel(msfile, pol=0, delta=16, threshold=1e5):
     fig.suptitle(msfile, fontweight='bold')
     ax = fig.add_subplot(111)
     colors = iter(cm.rainbow(np.linspace(0, 1, len(weights))))
-    variance = variance[:, :, pol]
-    variance = normalize(variance, np.nanmin(variance), np.nanmax(variance))
+    #variance = variance[:, :, pol]
+    variance = variance[:, :]
+    #variance = normalize(variance, np.nanmin(variance), np.nanmax(variance))
 
     indices = ((np.asarray(range(0, variance.shape[1])) + 0.5) * delta).astype(int)
     #f = freq[indices]
     f = freq[::delta]
     for v, c, a in zip(variance, colors, antennas):
         if len(f) > variance.shape[1]:
-            ax.scatter(f[:-1], v, color=c, marker='.', label=antenna_names[a]['NAME'])
+            #ax.scatter(f[:-1], v, color=c, marker='.', label=antenna_names[a]['NAME'])
+            ax.plot(f[:-1], v, '--.', color=c, label=antenna_names[a]['NAME'])
         elif len(f) == variance.shape[1]:
-            ax.scatter(f, v, color=c, marker='.', label=antenna_names[a]['NAME'])
+            #ax.scatter(f, v, color=c, marker='.', label=antenna_names[a]['NAME'])
+            ax.plot(f, v, '--.', color=c, label=antenna_names[a]['NAME'])
     
     ax.set_xlim(min(freq), max(freq))
     ax.set_ylim(np.nanmin(variance), np.nanmax(variance))
@@ -281,5 +285,5 @@ def plot_weight_time(msfile, delta=10, plot_time_unit='h'):
 if __name__ == '__main__':
     # Get the MS filename.
     msfile = sys.argv[1]
-    plot_weight_channel(msfile, delta=8)
-    plot_weight_time(msfile, delta=100)
+    plot_weight_channel(msfile, delta=128)
+    #plot_weight_time(msfile, delta=100)
