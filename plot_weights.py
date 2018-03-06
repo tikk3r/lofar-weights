@@ -82,9 +82,9 @@ def plot_weight_channel(msfile, pol=0, delta=16, per_antenna=False, threshold=1e
     # Polarization indices are 0, 1, 2, 3 = XX, YY, XY, YX, respectively.
     print 'Plotting weights vs. channels for %s' % (msfile,)
     # Select only rows where not all data is flagged.
-    t1 = taql('SELECT TIME, ANTENNA1 AS ANTENNA, DATA, WEIGHT_SPECTRUM FROM $msfile WHERE ALL(FLAG)==False && ANY(ISNAN(DATA))==False')
+    t1 = taql('SELECT TIME, ANTENNA1 AS ANTENNA, DATA, WEIGHT_SPECTRUM FROM $msfile WHERE ALL(FLAG)==False && ALL(ISNAN(DATA))==False')
     # Average over all baselines (axis 0) and group the resulting data by antenna.
-    t = taql('SELECT ANTENNA, MEANS(GAGGR(REAL(DATA)), 0) AS DATA_REAL, MEANS(GAGGR(WEIGHT_SPECTRUM),0) AS WEIGHT FROM $t1 GROUPBY ANTENNA')
+    t = taql('SELECT ANTENNA, MEANS(GAGGR(DATA), 0) AS DATA_REAL, MEANS(GAGGR(WEIGHT_SPECTRUM),0) AS WEIGHT FROM $t1 GROUPBY ANTENNA')
     #t = taql('SELECT TIME, ANTENNA, BOXEDMEAN(GAGGR(REAL(DATA)), 10, 1, 1) AS DATAR FROM $t1 WHERE !ANY(ISNAN(REAL(DATA))) GROUPBY TIME')
     # Get the polarization setup; X/Y or R/L.
     temp = taql('SELECT CORR_TYPE from '+msfile+'/POLARIZATION')
@@ -112,13 +112,18 @@ def plot_weight_channel(msfile, pol=0, delta=16, per_antenna=False, threshold=1e
     variance = np.ones(shape=(weights.shape[0], weights.shape[1]//delta))
     # Subtract adjacent channels to eliminate physical signal.
     datar_shifted = np.roll(datar, -1, axis=1)
-    datar -= datar_shifted
+    datars = datar - datar_shifted
+    datar = datars.real
+    datai = datars.imag
     if not per_antenna:
         datar = np.mean(datar, axis=0, keepdims=True)
+        datai = np.mean(datar, axis=0, keepdims=True)
         antenna_names = [{'NAME':''}]
     for i in xrange(datar.shape[1]//delta):
         # Take a frequency bin of delta channels.
-        v = np.nanvar(datar[:,delta*i: delta*i+delta], axis=1)
+        vr = np.nanvar(datar[:,delta*i: delta*i+delta], axis=1)
+        vi = np.nanvar(datai[:,delta*i: delta*i+delta], axis=1)
+        v = (vr + vi) / 2.
         print np.any(v)
         if not np.any(v):
             variance[:,i] = -np.inf
@@ -212,7 +217,7 @@ def plot_weight_time(msfile, delta=10, plot_time_unit='h'):
     # Select time, weights and elevation.
     # This gets the average elevation w.r.t. to antenna 1, where the average is taken over all baselines.
     t = taql('SELECT TIME, MEANS(GAGGR(WEIGHT_SPECTRUM),0) AS WEIGHT, MEANS(GAGGR(MSCAL.AZEL1()[1]), 0) AS ELEV FROM $t1 GROUPBY TIME')
-    t2 = taql('SELECT TIME, MEANS(GAGGR(REAL(DATA)),0) AS DATA_REAL FROM $t1 GROUPBY TIME')
+    t2 = taql('SELECT TIME, MEANS(GAGGR(DATA),0) AS DATA_REAL FROM $t1 GROUPBY TIME')
     weights = t.getcol('WEIGHT')
     time = t.getcol('TIME')
     elevation = t.getcol('ELEV')
@@ -222,9 +227,13 @@ def plot_weight_time(msfile, delta=10, plot_time_unit='h'):
     # datar shape is (timestamps, channels, polarizations)
     variance = np.ones(shape=(len(time)//delta, weights.shape[1], weights.shape[2]))
     datar_shifted = np.roll(datar, -1, axis=1)
-    datar = datar - datar_shifted
+    datars = datar - datar_shifted
+    datar = datars.real
+    datai = datars.imag
     for i in xrange(len(time)//delta):
-        v = np.nanvar(datar[delta*i: delta*i+delta,:,:], axis=0)
+        vr = np.nanvar(datar[delta*i: delta*i+delta,:,:], axis=0)
+        vi = np.nanvar(datai[delta*i: delta*i+delta,:,:], axis=0)
+        v = (vr + vi) / 2.
         if np.any(v):
             variance[i] = 1. / v
         else:
