@@ -124,11 +124,11 @@ def plot_weight_channel(msfile, pol=0, delta=16, per_antenna=False, threshold=1e
         vr = np.nanvar(datar[:,delta*i: delta*i+delta], axis=1)
         vi = np.nanvar(datai[:,delta*i: delta*i+delta], axis=1)
         v = (vr + vi) / 2.
-        print np.any(v)
-        if not np.any(v):
-            variance[:,i] = -np.inf
+        print np.any(np.isfinite(v))
+        if not np.any(np.isfinite(v)):
+            variance[:,i] = np.nan
         else:
-            variance[:,i] = np.where(v, 1. / v, 0)
+            variance[:,i] = np.where(np.isfinite(1. / v), 1. / v, 0)
 
     # Plot the results.
     print 'Plotting weights...'
@@ -234,8 +234,8 @@ def plot_weight_time(msfile, delta=10, plot_time_unit='h'):
         vr = np.nanvar(datar[delta*i: delta*i+delta,:,:], axis=0)
         vi = np.nanvar(datai[delta*i: delta*i+delta,:,:], axis=0)
         v = (vr + vi) / 2.
-        if np.any(v):
-            variance[i] = 1. / v
+        if np.any(np.isfinite(v)):
+            variance[i] = np.where(np.isfinite(1. / v), 1. / v, 0)
         else:
             variance[i] = np.nan
 
@@ -268,8 +268,10 @@ def plot_weight_time(msfile, delta=10, plot_time_unit='h'):
         del nmin, nmax
         
         # Normalize the statistic w.r.t. the XX/RR polarization.
+        print variance[:, :, 0]
         nmin = np.nanmin(variance[:, :, 0])
         nmax = np.nanmax(variance[:, :, 0])
+        print nmin, nmax
         indices = ((np.asarray(range(0, len(variance[:, 5, 0]))) + 0.5) * delta).astype(int)
         ax.plot(time_h[indices], normalize(variance[:, 5, 0], nmin, nmax), '--d', color='C1', label=polarization[0]+' Boxed variance $\\Delta=%d$'%(delta,))
         ax.plot(time_h[indices], normalize(variance[:, 5, 1], nmin, nmax), '--d', color='C2', label=polarization[1]+' Boxed variance $\\Delta=%d$'%(delta,))
@@ -302,4 +304,4 @@ if __name__ == '__main__':
     # Get the MS filename.
     msfile = sys.argv[1]
     plot_weight_channel(msfile, delta=32)
-    #plot_weight_time(msfile, delta=100)
+    plot_weight_time(msfile, delta=100)
