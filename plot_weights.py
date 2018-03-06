@@ -68,7 +68,7 @@ def plot_data_channel(msfile, pol=0):
     fig.savefig(imgname, bbox_inches='tight', additional_artists=leg, dpi=250)
     return 
 
-def plot_weight_channel(msfile, pol=0, delta=16, threshold=1e5):
+def plot_weight_channel(msfile, pol=0, delta=16, per_antenna=False, threshold=1e5):
     ''' Plot the weights in the WEIGHT_SPECTRUM column of an MS file as function of frequency.
 
     Args:
@@ -82,9 +82,10 @@ def plot_weight_channel(msfile, pol=0, delta=16, threshold=1e5):
     # Polarization indices are 0, 1, 2, 3 = XX, YY, XY, YX, respectively.
     print 'Plotting weights vs. channels for %s' % (msfile,)
     # Select only rows where not all data is flagged.
-    t1 = taql('SELECT TIME, ANTENNA1 AS ANTENNA, DATA, WEIGHT_SPECTRUM FROM $msfile WHERE ALL(FLAG)==False')
+    t1 = taql('SELECT TIME, ANTENNA1 AS ANTENNA, DATA, WEIGHT_SPECTRUM FROM $msfile WHERE ALL(FLAG)==False && ANY(ISNAN(DATA))==False')
     # Average over all baselines (axis 0) and group the resulting data by antenna.
-    t = taql('SELECT TIME, ANTENNA, MEANS(GAGGR(REAL(DATA)), 0) AS DATA_REAL, MEANS(GAGGR(WEIGHT_SPECTRUM),0) AS WEIGHT FROM $t1 GROUPBY ANTENNA')
+    t = taql('SELECT ANTENNA, MEANS(GAGGR(REAL(DATA)), 0) AS DATA_REAL, MEANS(GAGGR(WEIGHT_SPECTRUM),0) AS WEIGHT FROM $t1 GROUPBY ANTENNA')
+    #t = taql('SELECT TIME, ANTENNA, BOXEDMEAN(GAGGR(REAL(DATA)), 10, 1, 1) AS DATAR FROM $t1 WHERE !ANY(ISNAN(REAL(DATA))) GROUPBY TIME')
     # Get the polarization setup; X/Y or R/L.
     temp = taql('SELECT CORR_TYPE from '+msfile+'/POLARIZATION')
     if temp.getcol('CORR_TYPE')[0] in np.asarray([5, 6, 7, 8]):
@@ -112,17 +113,23 @@ def plot_weight_channel(msfile, pol=0, delta=16, threshold=1e5):
     # Subtract adjacent channels to eliminate physical signal.
     datar_shifted = np.roll(datar, -1, axis=1)
     datar -= datar_shifted
+    if not per_antenna:
+        datar = np.mean(datar, axis=0, keepdims=True)
+        antenna_names = [{'NAME':''}]
     for i in xrange(datar.shape[1]//delta):
         # Take a frequency bin of delta channels.
         v = np.nanvar(datar[:,delta*i: delta*i+delta], axis=1)
+        print np.any(v)
         if not np.any(v):
             variance[:,i] = -np.inf
         else:
-            variance[:,i] = 1. / v
+            variance[:,i] = np.where(v, 1. / v, 0)
 
     # Plot the results.
     print 'Plotting weights...'
     weights = weights[:, :, pol]
+    if not per_antenna:
+        weights = np.mean(weights, axis=0, keepdims=True)
     imgname ='weight_chan_' + msfile[msfile.find('SB'):msfile.find('SB')+5]+str(delta)+'.png'
     fig = figure()
     fig.suptitle(msfile, fontweight='bold')
@@ -241,9 +248,9 @@ def plot_weight_time(msfile, delta=10, plot_time_unit='h'):
         print np.unique(wexponents)
         weights = np.where(wexponents < 0, weights, 1e-10)
         
-        # Normalize the weights w.r.t. the XX polarization.
-        nmin = np.nanmin(weights[:, 5, 0])
-        nmax = np.nanmax(weights[:, 5, 0])
+        # Normalize the weights w.r.t. the XX/RR polarization.
+        nmin = np.nanmin(weights[:, :, 0])
+        nmax = np.nanmax(weights[:, :, 0])
         
         ax.scatter(time_h, normalize(weights[:, 5, 0], nmin, nmax), marker='.', color='C1', alpha=0.25, label=polarization[0]+' Weights')
         ax.scatter(time_h, normalize(weights[:, 5, 1], nmin, nmax), marker='.', color='C2', alpha=0.25, label=polarization[1]+' Weights')
@@ -251,9 +258,9 @@ def plot_weight_time(msfile, delta=10, plot_time_unit='h'):
         ax.scatter(time_h, normalize(weights[:, 5, 3], nmin, nmax), marker='.', color='C4', alpha=0.25, label=polarization[3]+' Weights')
         del nmin, nmax
         
-        # Normalize the statistic w.r.t. the XX polarization.
-        nmin = np.nanmin(variance[:, 5, 0])
-        nmax = np.nanmax(variance[:, 5, 0])
+        # Normalize the statistic w.r.t. the XX/RR polarization.
+        nmin = np.nanmin(variance[:, :, 0])
+        nmax = np.nanmax(variance[:, :, 0])
         indices = ((np.asarray(range(0, len(variance[:, 5, 0]))) + 0.5) * delta).astype(int)
         ax.plot(time_h[indices], normalize(variance[:, 5, 0], nmin, nmax), '--d', color='C1', label=polarization[0]+' Boxed variance $\\Delta=%d$'%(delta,))
         ax.plot(time_h[indices], normalize(variance[:, 5, 1], nmin, nmax), '--d', color='C2', label=polarization[1]+' Boxed variance $\\Delta=%d$'%(delta,))
@@ -285,5 +292,5 @@ def plot_weight_time(msfile, delta=10, plot_time_unit='h'):
 if __name__ == '__main__':
     # Get the MS filename.
     msfile = sys.argv[1]
-    plot_weight_channel(msfile, delta=128)
+    plot_weight_channel(msfile, delta=32)
     #plot_weight_time(msfile, delta=100)
