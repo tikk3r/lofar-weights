@@ -23,51 +23,6 @@ def normalize(x, nmin, nmax):
     normed = (x - nmin) / (nmax - nmin)
     return normed
 
-def plot_data_channel(msfile, pol=0):
-    # Polarization indices are 0, 1, 2, 3 = XX, YY, XY, YX, respectively.
-    print 'Plotting data vs. channel for %s' % (msfile,)
-    imgname ='data_chan_' + msfile[msfile.find('SB'):msfile.find('SB')+5]+'.png'
-    # GMEANS (or MEANS(GAGGR(array), N) calculates the mean over the Nth axis.
-    # Select only rows containing no flagged data.
-    t1 = taql('SELECT TIME, ANTENNA1 AS ANTENNA, DATA, WEIGHT_SPECTRUM FROM $msfile WHERE ANY(FLAG)==False')
-    # Average over all baselines (axis 0) and group the resulting data by antenna.
-    t = taql('SELECT TIME, ANTENNA, MEANS(GAGGR(DATA), 0) AS DATA, MEANS(GAGGR(WEIGHT_SPECTRUM),0) AS WEIGHT FROM $t1 GROUPBY ANTENNA')
-    #t1 = taql('SELECT ANTENNA1, DATA, WEIGHT_SPECTRUM, TIME, FIELD_ID FROM $msfile WHERE ANY(FLAG)==False')
-    #t = taql('select ANTENNA, MEANS(GAGGR(DATA), 0) as DATA, MEANS(GAGGR(WEIGHT_SPECTRUM), 0) as WEIGHT from [SELECT ANTENNA1 AS ANTENNA, DATA, WEIGHT_SPECTRUM from $t1] group by ANTENNA')
-    d = t.getcol('DATA')
-    print d.shape
-    # Select all antennas, all channels and polarization pol.
-    data = np.abs(t.getcol('DATA')[:, :, pol])
-    antennas = t.getcol('ANTENNA')
-    print len(antennas), ' antennas'
-    antenna_names = taql('SELECT NAME FROM '+msfile+'/ANTENNA')
-    # Obtain channel frequencies in Hz.
-    #chan_freq = taql('SELECT CHAN_FREQ FROM '+msfile+'/SPECTRAL_WINDOW')
-    # Select the first table, column CHAN_FREQ and convert to MHz.
-    #freq = chan_freq[0]['CHAN_FREQ'] * 1e-6
-    # Plot the results.
-    print 'Plotting...'
-    fig = figure()
-    fig.suptitle(msfile, fontweight='bold')
-    ax = fig.add_subplot(111)
-    colors = iter(cm.rainbow(np.linspace(0, 1, len(data))))
-    for d, c, a in zip(data, colors, antennas):
-        #ax.scatter(freq, d, color=c, marker='.', label=antenna_names[a]['NAME'])
-        ax.scatter(xrange(len(d)), d, color=c, marker='.', label=antenna_names[a]['NAME'])
-    #ax.set_xlim(min(freq), max(freq))
-    ax.set_xlim(0, len(d))
-    ax.set_ylim(np.min(data), np.max(data))
-    #ax.xaxis.set_major_locator(ticker.MultipleLocator(0.05))
-    #major_formatter = ticker.FuncFormatter(lambda x, pos: '%.2f'%(x,))
-    #ax.xaxis.set_major_formatter(major_formatter)
-    ax.set_xlabel('Channel')
-    ax.set_ylabel('Data')
-    ax.set_yscale('log')
-    leg = ax.legend(bbox_to_anchor=(1.05, 1.0), ncol=3, borderaxespad=0.0)
-    print 'Saving plot as %s' % (imgname,)
-    fig.savefig(imgname, bbox_inches='tight', additional_artists=leg, dpi=250)
-    return 
-
 def plot_weight_channel_time_average(msfile, pol=0, delta=16, per_antenna=False, threshold=1e5):
     ''' Plot the weights in the WEIGHT_SPECTRUM column of an MS file as function of frequency.
 
@@ -82,9 +37,9 @@ def plot_weight_channel_time_average(msfile, pol=0, delta=16, per_antenna=False,
     # Polarization indices are 0, 1, 2, 3 = XX, YY, XY, YX, respectively.
     print 'Plotting weights vs. channels for %s' % (msfile,)
     # Select only rows where not all data is flagged.
-    t1 = taql('SELECT TIME, ANTENNA1 AS ANTENNA, DATA, WEIGHT_SPECTRUM FROM $msfile WHERE ALL(FLAG)==False && ALL(ISNAN(DATA))==False')
+    t1 = taql('SELECT TIME, ANTENNA1 AS ANTENNA, DATA, WEIGHT_SPECTRUM, FLAG FROM $msfile WHERE ALL(FLAG)==False && ALL(ISNAN(DATA))==False')
     # Average over all baselines (axis 0) and group the resulting data by antenna.
-    t = taql('SELECT ANTENNA, MEANS(GAGGR(DATA), 0) AS DATA_REAL, MEANS(GAGGR(WEIGHT_SPECTRUM),0) AS WEIGHT FROM $t1 GROUPBY TIME')
+    t = taql('SELECT ANTENNA, MEANS(GAGGR(DATA), 0) AS DATA_REAL, MEANS(GAGGR(WEIGHT_SPECTRUM),0), FLAG AS WEIGHT FROM $t1 GROUPBY TIME')
     #t = taql('SELECT TIME, ANTENNA, BOXEDMEAN(GAGGR(REAL(DATA)), 10, 1, 1) AS DATAR FROM $t1 WHERE !ANY(ISNAN(REAL(DATA))) GROUPBY TIME')
     # Get the polarization setup; X/Y or R/L.
     temp = taql('SELECT CORR_TYPE from '+msfile+'/POLARIZATION')
@@ -94,11 +49,15 @@ def plot_weight_channel_time_average(msfile, pol=0, delta=16, per_antenna=False,
     elif temp.getcol('CORR_TYPE')[0] in np.asarray([9, 10, 11, 12]):
         polarization = ['XX', 'YY', 'XY', 'YX']
     # Average the data over all time stamps.
-    datar = t.getcol('DATA_REAL')[:, :, pol]
-    print datar.shape
+    flags = t.getcol('FLAG')
+    datar = t.getcol('DATA_REAL')
+    datar = np.ma.MaskedArray(data=datar, mask=flags)
+    datar = datar[:,:,pol]
     data_taverage = datar.mean(axis=0)
-    print data_taverage.shape
+    print datar.shape
     weights = t.getcol('WEIGHT')
+    weights = np.ma.MaskedArray(data=weights, mask=flags)
+    weights = weights[:, :, pol]
     # Obtain channel frequencies in Hz.
     chan_freq = taql('SELECT CHAN_FREQ FROM '+msfile+'/SPECTRAL_WINDOW')
     # Select the first table, column CHAN_FREQ and convert to MHz.
@@ -129,7 +88,6 @@ def plot_weight_channel_time_average(msfile, pol=0, delta=16, per_antenna=False,
     print variance.shape
     # Plot the results.
     print 'Plotting weights...'
-    weights = weights[:, :, pol]
     if not per_antenna:
         weights = np.mean(weights, axis=0, keepdims=True)
     imgname ='weight_chan_' + msfile[msfile.find('SB'):msfile.find('SB')+5]+str(delta)+'.png'
@@ -195,9 +153,9 @@ def plot_weight_channel(msfile, pol=0, delta=16, per_antenna=False, threshold=1e
     # Polarization indices are 0, 1, 2, 3 = XX, YY, XY, YX, respectively.
     print 'Plotting weights vs. channels for %s' % (msfile,)
     # Select only rows where not all data is flagged.
-    t1 = taql('SELECT TIME, ANTENNA1 AS ANTENNA, DATA, WEIGHT_SPECTRUM FROM $msfile WHERE ALL(FLAG)==False && ALL(ISNAN(DATA))==False')
+    t1 = taql('SELECT TIME, ANTENNA1 AS ANTENNA, DATA, WEIGHT_SPECTRUM, FLAG FROM $msfile WHERE ALL(FLAG)==False && ALL(ISNAN(DATA))==False')
     # Average over all baselines (axis 0) and group the resulting data by antenna.
-    t = taql('SELECT ANTENNA, MEANS(GAGGR(DATA), 0) AS DATA_REAL, MEANS(GAGGR(WEIGHT_SPECTRUM),0) AS WEIGHT FROM $t1 GROUPBY ANTENNA')
+    t = taql('SELECT ANTENNA, MEANS(GAGGR(DATA), 0) AS DATA_REAL, MEANS(GAGGR(WEIGHT_SPECTRUM),0) AS WEIGHT, FLAG FROM $t1 GROUPBY ANTENNA')
     #t = taql('SELECT TIME, ANTENNA, BOXEDMEAN(GAGGR(REAL(DATA)), 10, 1, 1) AS DATAR FROM $t1 WHERE !ANY(ISNAN(REAL(DATA))) GROUPBY TIME')
     # Get the polarization setup; X/Y or R/L.
     temp = taql('SELECT CORR_TYPE from '+msfile+'/POLARIZATION')
@@ -206,10 +164,15 @@ def plot_weight_channel(msfile, pol=0, delta=16, per_antenna=False, threshold=1e
         polarization = ['RR', 'LL', 'RL', 'LR']
     elif temp.getcol('CORR_TYPE')[0] in np.asarray([9, 10, 11, 12]):
         polarization = ['XX', 'YY', 'XY', 'YX']
-    
-    datar = t.getcol('DATA_REAL')[:,:,pol]
+    flags = t.getcol('FLAG')
+    datar = t.getcol('DATA_REAL')
+    datar = np.ma.MaskedArray(data=datar, mask=flags)
+    datar = datar[:,:,pol]
     print datar.shape
     weights = t.getcol('WEIGHT')
+    weights = np.ma.MaskedArray(data=weights, mask=flags)
+    weights = weights[:, :, pol]
+
     antennas = t.getcol('ANTENNA')
     print len(antennas), ' antennas'
     antenna_names = taql('SELECT NAME FROM '+msfile+'/ANTENNA')
@@ -247,7 +210,6 @@ def plot_weight_channel(msfile, pol=0, delta=16, per_antenna=False, threshold=1e
     
     # Plot the results.
     print 'Plotting weights...'
-    weights = weights[:, :, pol]
     if not per_antenna:
         weights = np.mean(weights, axis=0, keepdims=True)
     imgname ='weight_chan_' + msfile[msfile.find('SB'):msfile.find('SB')+5]+str(delta)+'.png'
@@ -325,7 +287,7 @@ def plot_weight_time(msfile, delta=10, plot_time_unit='h'):
     imgname ='weight_time_' + msfile[msfile.find('SB'):msfile.find('SB')+5]+'_'+str(delta)+'.png'
     # Select the time, weights and elevation of ANTENNA1 averaging over baselines/antennas.
     # Select only unflagged data.
-    t1 = taql('select ANTENNA1, ANTENNA2, DATA, WEIGHT_SPECTRUM, TIME, FIELD_ID from $msfile where ALL(FLAG)==False')
+    t1 = taql('select ANTENNA1, ANTENNA2, DATA, WEIGHT_SPECTRUM, TIME, FIELD_ID, FLAG from $msfile where ALL(FLAG)==False')
     # Get the polarization setup; X/Y or R/L.
     temp = taql('SELECT CORR_TYPE from '+msfile+'/POLARIZATION')
     if temp.getcol('CORR_TYPE')[0] in np.asarray([5, 6, 7, 8]):
@@ -337,11 +299,15 @@ def plot_weight_time(msfile, delta=10, plot_time_unit='h'):
     # This gets the average elevation w.r.t. to antenna 1, where the average is taken over all baselines.
     t = taql('SELECT TIME, MEANS(GAGGR(WEIGHT_SPECTRUM),0) AS WEIGHT, MEANS(GAGGR(MSCAL.AZEL1()[1]), 0) AS ELEV FROM $t1 GROUPBY TIME')
     t2 = taql('SELECT TIME, MEANS(GAGGR(DATA),0) AS DATA_REAL FROM $t1 GROUPBY TIME')
-    weights = t.getcol('WEIGHT')
     time = t.getcol('TIME')
     elevation = t.getcol('ELEV')
 
+    flags = t2.getcol('FLAG')
     datar = t2.getcol('DATA_REAL')
+    datar = np.ma.MaskedArray(data=datar, mask=flags)
+    weights = t.getcol('WEIGHT')
+    weights = np.ma.MaskedArray(data=weights, mask=flags)
+
     # Calculate variance over 10 timestamp intervals. The last interval may be shorter.
     # datar shape is (timestamps, channels, polarizations)
     variance = np.ones(shape=(len(time)//delta, weights.shape[1], weights.shape[2]))
