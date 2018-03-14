@@ -95,7 +95,7 @@ class WeightPlotter:
     def plot_variance_2D(self, delta=3):
         print 'Plotting variance matrix...'
         fig, axes = subplots(nrows=2, ncols=2, sharex=True, sharey=True)
-        fig.suptitle('Variance '+self.msfile+', box =%dx%d'%(delta, delta), fontweight='bold')
+        fig.suptitle('Inverse Variance '+self.msfile+', box =%dx%d'%(delta, delta), fontweight='bold')
         axes = axes.ravel()
         for (pol, pol_label) in enumerate(self.polarization):
             print 'Processing polarization '+pol_label
@@ -200,6 +200,7 @@ class WeightPlotter:
                 weights = np.ma.masked_where(weights < outlier_thresh_low, weights)
                 axes[pol].set_title(pol_label+' (IQR filtered)')
             else:
+                weights = self.weights
                 axes[pol].set_title(pol_label)
             fweights = np.mean(weights, axis=0)
             # Normalize w.r.t. XX or RR.
@@ -373,6 +374,10 @@ class WeightPlotter:
                 v = np.nanvar(box_vis)
                 if v != 0.0:
                     w = 1. / v
+                else:
+                    w = 0.
+            else:
+                w = 0.
             if np.isfinite(w):
                 weight[y, x] = w
         return weight
@@ -384,7 +389,7 @@ if __name__ == '__main__':
     wp = WeightPlotter(msfile)
     wp.plot_weight_time(mode='mean')
     wp.plot_weight_time(mode='median')
-    wp.plot_weight_frequency(delta=30)
+    wp.plot_weight_frequency(delta=10)
     wp.plot_weight_2D()
     wp.plot_variance_2D(delta=3)
     #wp.plot_variance_2D(delta=7)
