@@ -323,7 +323,7 @@ class WeightPlotter:
             if np.max(self.weights[:, :, pol]) > outlier_thresh_high or np.min(self.weights[:, :, pol]) < outlier_thresh_low:
                 weights = np.ma.masked_where(self.weights[:, :, pol] > outlier_thresh_high, self.weights[:, :, pol])
                 weights = np.ma.masked_where(weights < outlier_thresh_low, weights)
-                fig.suptitle('Weights ('+mode+') for '+self.msfile+', $\\Delta=100$ (IQR filtered)', fontweight='bold')
+                fig.suptitle('Weights ('+mode+') for '+self.msfile+', $\\Delta=%d$ (IQR filtered)'%(delta,), fontweight='bold')
             else:
                 weights = self.weights[:, :, pol]
 
@@ -342,7 +342,9 @@ class WeightPlotter:
             if pol == 0:
                 nmin = np.nanmin(tweights); nmax = np.nanmax(tweights)
             nweights = normalize(tweights, nmin, nmax)
-            nvar = normalize(variance[:, pol], np.nanmin(variance[:, 0]), np.nanmax(variance[:, 0]))
+            var = filter_IQR(variance[:, pol])
+            nvar = normalize(var, np.nanmin(var), np.nanmax(var))
+
 
             axes.plot(self.time, nweights, label=pol_label, alpha=0.5, color=self.colors[pol])
             axes.plot(t_axis, nvar, '--d', label='Variance '+pol_label, color=self.colors[pol])
@@ -405,9 +407,9 @@ if __name__ == '__main__':
     msfile = sys.argv[1]
     wp = WeightPlotter(msfile)
     #wp.plot_data_2D()
-    wp.plot_weight_time(mode='mean', delta=50)
-    wp.plot_weight_time(mode='median', delta=50)
-    wp.plot_weight_frequency(delta=5)
+    wp.plot_weight_time(mode='mean', delta=100)
+    wp.plot_weight_time(mode='median', delta=100)
+    wp.plot_weight_frequency(delta=20)
     #wp.plot_weight_2D()
     #wp.plot_variance_2D(delta=3)
     #wp.plot_variance_2D(delta=7)
