@@ -19,6 +19,21 @@ __maintainer__ = 'Frits Sweijen'
 __email__ = 'sweijen <at> strw.leidenuniv.nl'
 __status__ = 'Development'
 
+def filter_IQR(x, threshold=3):
+    Q1 = np.percentile(x, 25)
+    Q3 = np.percentile(x, 75)
+    IQR = Q3 - Q1
+    if type(x) is np.ma.core.MaskedArray:
+        med = np.ma.median(x)
+    else:
+        med = np.median(x)
+    bound_upper = med + threshold * IQR
+    bound_lower = med - threshold * IQR
+    y = np.ma.masked_where(x > bound_upper, x)
+    z = np.ma.masked_where(y < bound_lower, y)
+    return z
+
+
 def normalize(x, nmin, nmax):
     normed = (x - nmin) / (nmax - nmin)
     return normed
@@ -187,6 +202,7 @@ class WeightPlotter:
             nmin = np.nanmin(fvar)
             nmax = np.nanmax(fvar)
             nvar = normalize(fvar, nmin, nmax)
+            nvar = filter_IQR(nvar, 3)
             # Deal with outliers in the weights to avoid plotting issues/biases.
             Q1 = np.percentile(self.weights, 25)
             Q3 = np.percentile(self.weights, 75)
@@ -264,7 +280,7 @@ class WeightPlotter:
     def plot_weight_time(self, mode='mean', delta=100):
         print 'Plotting weights vs. time...'
         fig, axes = subplots(nrows=1, ncols=1)
-        fig.suptitle('Weights ('+mode+') for '+self.msfile+', $\\Delta=100$', fontweight='bold')
+        fig.suptitle('Weights ('+mode+') for '+self.msfile+', $\\Delta=%d$'%(delta,), fontweight='bold')
         axes.set(xlabel='Time', ylabel=self.polarization[0]+' Normalized Weight')
         axes.label_outer()
         axes_elev = axes.twinx()
@@ -275,13 +291,14 @@ class WeightPlotter:
         data_sub = self.data - data_shift
 
         # Take the mean or median over frequency to marginalize into the time domain.
+        data_sub = np.ma.masked_where(~np.isfinite(data_sub), data_sub)
         if mode == 'median':
-            tdata = np.median(data_sub, axis=1)
+            tdata = np.ma.median(data_sub, axis=1)
         elif mode == 'mean':
-            tdata = np.mean(data_sub, axis=1)
+            tdata = np.ma.mean(data_sub, axis=1)
         else:
             print 'Unknown mode, using median.'
-            tdata = np.median(data_sub, axis=1)
+            tdata = np.ma.median(data_sub, axis=1)
         variance = np.zeros(shape=(tdata.shape[0] // delta, tdata.shape[1]))
 
         tdatar = tdata.real
@@ -387,13 +404,14 @@ if __name__ == '__main__':
     # Get the MS filename.
     msfile = sys.argv[1]
     wp = WeightPlotter(msfile)
-    wp.plot_weight_time(mode='mean')
-    wp.plot_weight_time(mode='median')
-    wp.plot_weight_frequency(delta=10)
-    wp.plot_weight_2D()
-    wp.plot_variance_2D(delta=3)
+    #wp.plot_data_2D()
+    wp.plot_weight_time(mode='mean', delta=50)
+    wp.plot_weight_time(mode='median', delta=50)
+    wp.plot_weight_frequency(delta=5)
+    #wp.plot_weight_2D()
+    #wp.plot_variance_2D(delta=3)
     #wp.plot_variance_2D(delta=7)
     #wp.plot_variance_2D(delta=9)
-    wp.plot_data_2D()
+
     #from matplotlib.pyplot import show
     #show()
