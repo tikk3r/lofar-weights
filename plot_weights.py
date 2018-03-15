@@ -193,9 +193,10 @@ class WeightPlotter:
             fvar = np.zeros(shape=fdata.shape[0] // delta)
             f_axis = np.empty(shape=fdata.shape[0] // delta)
             for i in xrange(fdata.shape[0] // delta):
-                vr = np.nanvar(fdata.real[delta * i:delta * (i+1)])
-                vi = np.nanvar(fdata.imag[delta * i:delta * (i+1)])
-                v = (vr + vi) / 2.
+                #vr = np.nanvar(fdata.real[delta * i:delta * (i+1)])
+                #vi = np.nanvar(fdata.imag[delta * i:delta * (i+1)])
+                #v = (vr + vi) / 2.
+                v = np.nanvar(fdata[delta * i:delta * (i+1)])
                 if v != 0 and np.isfinite(v):
                     fvar[i] = 1. / v
                 f_axis[i] = np.mean(self.freq[delta * i:delta * (i+1)])
@@ -228,7 +229,7 @@ class WeightPlotter:
             axes[pol].set(xlabel='Frequency [MHz]', ylabel=self.polarization[0]+' Normalized Weight')
             axes[pol].label_outer()
             axes[pol].plot(self.freq, nweights, color=self.colors[pol], label=pol_label+' MS Weights')
-            axes[pol].plot(f_axis, nvar, '--d', color=self.colors[pol], label=pol_label+' Variance', linewidth=2, path_effects=[pe.Stroke(linewidth=4, foreground='k'), pe.Normal()])
+            axes[pol].plot(f_axis, nvar, '--d', color=self.colors[pol], label=pol_label+' Inv. Variance', linewidth=2, path_effects=[pe.Stroke(linewidth=4, foreground='k'), pe.Normal()])
 
             lhandle, llabel = axes[pol].get_legend_handles_labels()
             handles.append(lhandle)
@@ -268,7 +269,7 @@ class WeightPlotter:
             axes[pol].set(xlabel='Frequency [MHz]', ylabel=self.polarization[0]+' Normalized Weight')
             axes[pol].label_outer()
             axes[pol].plot(self.freq, nweights, color=self.colors[pol], label=pol_label+' MS Weights')
-            axes[pol].plot(f_axis, nvar, '--d', color=self.colors[pol], label=pol_label+' Variance', linewidth=2, path_effects=[pe.Stroke(linewidth=4, foreground='k'), pe.Normal()])
+            axes[pol].plot(f_axis, nvar, '--d', color=self.colors[pol], label=pol_label+' Inv. Variance', linewidth=2, path_effects=[pe.Stroke(linewidth=4, foreground='k'), pe.Normal()])
             lhandle, llabel = axes[pol].get_legend_handles_labels()
             handles.append(lhandle)
             labels.append(llabel)
@@ -308,9 +309,10 @@ class WeightPlotter:
         for i in xrange(tdata.shape[0] // delta):
             t = np.mean(self.time[delta * i: delta * (i+1)])
             t_axis.append(t)
-            vr = np.nanvar(tdatar[delta * i: delta * (i+1), :], axis=0)
-            vi = np.nanvar(tdatai[delta * i: delta * (i+1), :], axis=0)
-            v = (vr + vi) / 2.
+            #vr = np.nanvar(tdatar[delta * i: delta * (i+1), :], axis=0)
+            #vi = np.nanvar(tdatai[delta * i: delta * (i+1), :], axis=0)
+            #v = (vr + vi) / 2.
+            v = np.nanvar(tdataf[delta * i: delta * (i+1), :], axis=0)
             variance[i] = np.where(np.isfinite(1. / v), 1. / v, np.nan)
 
         for (pol, pol_label) in enumerate(self.polarization):
