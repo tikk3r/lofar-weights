@@ -379,8 +379,8 @@ class WeightPlotter:
             ax = fig.add_subplot(111)
             for w, c, a in zip(weights[:, :, pol], colors, antennas):
                 if filtered:
-                    y = savitzky_golay(w, window_size=5, order=1)
-                    ax.plot(self.freq, w, color=c, label=antenna_names[a])
+                    y = savitzky_golay(w, window_size=7, order=1)
+                    ax.plot(self.freq, y, color=c, label=antenna_names[a])
                 else:
                     ax.plot(self.freq, w, color=c, label=antenna_names[a])
             ax.set_xlim(min(self.freq), max(self.freq))
