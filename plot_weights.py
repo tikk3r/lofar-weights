@@ -8,7 +8,7 @@ import numpy as np
 
 from casacore.tables import taql
 from matplotlib import cm
-from matplotlib.pyplot import subplots
+from matplotlib.pyplot import figure, subplots
 from matplotlib import ticker
 from matplotlib.pyplot import show
 
@@ -49,6 +49,7 @@ class WeightPlotter:
         # Open the table and ignore rows that are completely flagged.
         print 'Loading '+msfile+'...'
         mstable_init = taql('SELECT TIME, ANTENNA1, FIELD_ID, DATA, WEIGHT_SPECTRUM, FLAG FROM $msfile WHERE !ALL(FLAG)')
+        self.mstable_init = mstable_init
         self.mstable = taql('SELECT TIME, MEANS(GAGGR(DATA), 0) AS DATA, MEANS(GAGGR(WEIGHT_SPECTRUM),0) AS WEIGHTS, MEANS(GAGGR(MSCAL.AZEL1()[1]), 0) AS ELEV, FLAG FROM $mstable_init GROUPBY TIME')
 
         # Additional processing before we can use the data.
@@ -278,6 +279,46 @@ class WeightPlotter:
         fig.savefig(imgname, bbox_inches='tight', additional_artists=leg, dpi=250)
         print 'Saved plot '+imgname
 
+    def plot_weight_frequency_antenna(self):
+        ''' Requires resorting the init table, so it probably takes a time of the order of initial run.
+        '''
+        print 'Plotting WEIGHT vs frequency per antenna.'
+        tab = self.mstable_init
+        t = taql('SELECT ANTENNA1 AS ANTENNA, DATA, WEIGHT_SPECTRUM AS WEIGHTS, FLAG FROM $tab GROUPBY ANTENNA1')
+
+        # Additional processing before we can use the data.
+        flags = t.getcol('FLAG')
+        data_um = t.getcol('DATA')
+        data = np.ma.MaskedArray(data=data_um, mask=flags)
+
+        weights_um = t.getcol('WEIGHTS')
+        weights = np.ma.MaskedArray(data=weights_um, mask=flags)
+        weights = filter_IQR(weights, threshold=5)
+        print 'FLAG table applied to DATA and WEIGHT_SPECTRUM.'
+        antennas = t.getcol('ANTENNA')
+        print len(antennas), ' antennas'
+        antenna_names = taql('SELECT NAME FROM '+msfile+'/ANTENNA')
+        antenna_names = antenna_names.getcol('NAME')
+        print data.shape
+        for pol, pol_label in enumerate(self.polarization):
+            colors = iter(cm.rainbow(np.linspace(0, 1, weights.shape[0])))
+            fig = figure()
+            fig.suptitle('WEIGHT vs frequency (IQR filtered) for %s'%(self.msfile,))
+            ax = fig.add_subplot(111)
+            for w, c, a in zip(weights[:, :, pol], colors, antennas):
+                ax.plot(self.freq, w, color=c, label=antenna_names[a])
+            ax.set_xlim(min(self.freq), max(self.freq))
+            ax.set_ylim(np.min(weights), np.max(weights))
+            ax.xaxis.set_major_locator(ticker.MultipleLocator(10))
+            major_formatter = ticker.FuncFormatter(lambda x, pos: '%.2f'%(x,))
+            ax.xaxis.set_major_formatter(major_formatter)
+            ax.set_xlabel('Frequency [MHz]')
+            ax.set_ylabel('Normalized Weights')
+            leg = ax.legend(bbox_to_anchor=(1.05, 1.0), ncol=3, borderaxespad=0.0)
+            imgname = 'weight_frequency_antenna_%s_%s.png' % (self.msfile, pol_label)
+            print 'Saving plot as %s' % (imgname,)
+            fig.savefig(imgname, bbox_inches='tight', additional_artists=leg, dpi=250)
+
     def plot_weight_time(self, mode='mean', delta=100):
         print 'Plotting weights vs. time...'
         fig, axes = subplots(nrows=1, ncols=1)
@@ -409,9 +450,10 @@ if __name__ == '__main__':
     msfile = sys.argv[1]
     wp = WeightPlotter(msfile)
     #wp.plot_data_2D()
-    wp.plot_weight_time(mode='mean', delta=100)
-    wp.plot_weight_time(mode='median', delta=100)
-    wp.plot_weight_frequency(delta=20)
+    #wp.plot_weight_time(mode='mean', delta=100)
+    #wp.plot_weight_time(mode='median', delta=100)
+    #wp.plot_weight_frequency(delta=20)
+    wp.plot_weight_frequency_antenna()
     #wp.plot_weight_2D()
     #wp.plot_variance_2D(delta=3)
     #wp.plot_variance_2D(delta=7)
