@@ -259,7 +259,7 @@ class WeightPlotter:
         labels = []
 
         for (pol, pol_label) in enumerate(self.polarization):
-            data_shift = np.roll(self.data, -1, axis=1)
+            data_shift = np.roll(self.data, -1, axis=0)
             data_sub = self.data - data_shift
             # Calculate the variance in frequency space.
             fdata = np.nanmean(data_sub[:, :, pol], axis=0)
@@ -528,8 +528,8 @@ if __name__ == '__main__':
     #wp.plot_data_2D()
     #wp.plot_weight_time(mode='mean', delta=100)
     #wp.plot_weight_time(mode='median', delta=100)
-    #wp.plot_weight_frequency(delta=20)
-    wp.plot_weight_frequency_antenna()
+    wp.plot_weight_frequency(delta=20)
+    #wp.plot_weight_frequency_antenna()
     #wp.plot_weight_2D()
     #wp.plot_variance_2D(delta=3)
     #wp.plot_variance_2D(delta=7)
