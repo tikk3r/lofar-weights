@@ -139,9 +139,9 @@ class WeightPlotter:
         temp = taql('SELECT CORR_TYPE from '+msfile+'/POLARIZATION')
         if temp.getcol('CORR_TYPE')[0] in np.asarray([5, 6, 7, 8]):
             # Circular polarization.
-            self.polarization = ['RR', 'LL', 'RL', 'LR']
+            self.polarization = ['RR', 'RL', 'LR', 'LL']
         elif temp.getcol('CORR_TYPE')[0] in np.asarray([9, 10, 11, 12]):
-            self.polarization = ['XX', 'YY', 'XY', 'YX']
+            self.polarization = ['XX', 'XY', 'YX', 'YY']
         print 'Polarzation setup:', ', '.join(self.polarization)
 
         # Obtain channel frequencies.
@@ -526,21 +526,12 @@ if __name__ == '__main__':
     msfile = sys.argv[1]
     wp = WeightPlotter(msfile)
     #wp.plot_data_2D()
-<<<<<<< HEAD
-    #wp.plot_weight_time(mode='mean', delta=100)
-    #wp.plot_weight_time(mode='median', delta=100)
-    wp.plot_weight_frequency(delta=20)
-    #wp.plot_weight_frequency_antenna()
-    #wp.plot_weight_2D()
-    #wp.plot_variance_2D(delta=3)
-=======
     wp.plot_weight_time(mode='mean', delta=100)
     wp.plot_weight_time(mode='median', delta=100)
     wp.plot_weight_frequency(delta=20)
     wp.plot_weight_frequency_antenna()
     wp.plot_weight_2D()
     wp.plot_variance_2D(delta=3)
->>>>>>> f26b3e8e9cd0d08a0395e13ba419a282ebb7950c
     #wp.plot_variance_2D(delta=7)
     #wp.plot_variance_2D(delta=9)
 
