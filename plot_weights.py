@@ -120,9 +120,9 @@ class WeightPlotter:
         self.colors = ['C1', 'C2', 'C3', 'C4']
         # Open the table and ignore rows that are completely flagged.
         print 'Loading '+msfile+'...'
-        mstable_init = taql('SELECT TIME, ANTENNA1, FIELD_ID, DATA, WEIGHT_SPECTRUM, FLAG FROM $msfile WHERE !ALL(FLAG)')
+        mstable_init = taql('SELECT TIME, ANTENNA1, FIELD_ID, CORRECTED_DATA, WEIGHT_SPECTRUM, FLAG FROM $msfile WHERE !ALL(FLAG)')
         self.mstable_init = mstable_init
-        self.mstable = taql('SELECT TIME, MEANS(GAGGR(DATA), 0) AS DATA, MEANS(GAGGR(WEIGHT_SPECTRUM),0) AS WEIGHTS, MEANS(GAGGR(MSCAL.AZEL1()[1]), 0) AS ELEV, FLAG FROM $mstable_init GROUPBY TIME')
+        self.mstable = taql('SELECT TIME, MEANS(GAGGR(CORRECTED_DATA), 0) AS DATA, MEANS(GAGGR(WEIGHT_SPECTRUM),0) AS WEIGHTS, MEANS(GAGGR(MSCAL.AZEL1()[1]), 0) AS ELEV, FLAG FROM $mstable_init GROUPBY TIME')
 
         # Additional processing before we can use the data.
         self.flags = self.mstable.getcol('FLAG')
@@ -356,7 +356,7 @@ class WeightPlotter:
         '''
         print 'Plotting WEIGHT vs frequency per antenna.'
         tab = self.mstable_init
-        t = taql('SELECT ANTENNA1 AS ANTENNA, DATA, WEIGHT_SPECTRUM AS WEIGHTS, FLAG FROM $tab GROUPBY ANTENNA1')
+        t = taql('SELECT ANTENNA1 AS ANTENNA, CORRECTED_DATA as DATA, WEIGHT_SPECTRUM AS WEIGHTS, FLAG FROM $tab GROUPBY ANTENNA1')
 
         # Additional processing before we can use the data.
         flags = t.getcol('FLAG')
@@ -526,12 +526,21 @@ if __name__ == '__main__':
     msfile = sys.argv[1]
     wp = WeightPlotter(msfile)
     #wp.plot_data_2D()
+<<<<<<< HEAD
     #wp.plot_weight_time(mode='mean', delta=100)
     #wp.plot_weight_time(mode='median', delta=100)
     wp.plot_weight_frequency(delta=20)
     #wp.plot_weight_frequency_antenna()
     #wp.plot_weight_2D()
     #wp.plot_variance_2D(delta=3)
+=======
+    wp.plot_weight_time(mode='mean', delta=100)
+    wp.plot_weight_time(mode='median', delta=100)
+    wp.plot_weight_frequency(delta=20)
+    wp.plot_weight_frequency_antenna()
+    wp.plot_weight_2D()
+    wp.plot_variance_2D(delta=3)
+>>>>>>> f26b3e8e9cd0d08a0395e13ba419a282ebb7950c
     #wp.plot_variance_2D(delta=7)
     #wp.plot_variance_2D(delta=9)
 
